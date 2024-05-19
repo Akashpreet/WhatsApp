@@ -1,5 +1,5 @@
 // import { group } from "console";
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values"
 export const createConversation=mutation({
     args:{
@@ -37,6 +37,51 @@ export const createConversation=mutation({
             })
             return conversationId
     },
+})
+export const getMyConversations=query({
+    args:{},
+    handler:async(ctx,args)=>{
+        const identity = await ctx.auth.getUserIdentity()
+        if(!identity){
+            throw new ConvexError("Unauthorized")
+        }
+        const user=await ctx.db
+        .query("users")
+        .withIndex("by_tokenIdentifier",q=>q.eq("tokenIdentifier",identity.tokenIdentifier))
+        .unique()
+        if(!user){
+            throw new ConvexError("User not found")
+        }
+        const conversations=await ctx.db.query("conversations").collect()
+        const myConversations=conversations.filter((conversation)=>{
+            return conversation.particapants.includes(user._id)
+        })
+        const conversationWithDetails=await Promise.all(
+            myConversations.map(async(conversation)=>{
+                let userDetails={}
+                if(!conversation.isGroup){
+                    const otherUserId=conversation.particapants.find(id=>id!==user._id)
+                    const userProfile=await ctx.db
+                    .query("users")
+                    .filter(q=>q.eq(q.field("_id"),otherUserId))
+                    .take(1)
+                    userDetails=userProfile[0]
+                }
+                const lastMessage=await ctx.db
+                .query("messages")
+                .filter((q)=>q.eq(q.field("conversation"),conversation._id))
+                .order("desc")
+                .take(1)
+
+                return{
+                    ...userDetails,
+                    ...conversation,
+                    lastMessage:lastMessage[0] || null
+                }
+            })
+        )
+        return conversationWithDetails
+    }
 })
 
 export const generateUploadUrl=mutation(async(ctx)=>{
