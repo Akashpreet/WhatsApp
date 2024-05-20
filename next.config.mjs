@@ -1,4 +1,10 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+    images:{
+        remotePatterns:[
+            {hostname:"tacit-meerkat-627.convex.cloud"}
+        ]
+    }
+};
 
 export default nextConfig;
